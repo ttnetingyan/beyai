@@ -62,7 +62,7 @@
                 }
 
                 setLoading(true);
-setError(null);
+                setError(null);
                 setVideoUrl(null);
                 setProgress(0);
 
@@ -73,6 +73,7 @@ setError(null);
                 try {
                     const payload = { image: image, prompt: prompt };
 
+                    // 1. ADIM: Render'a istek gönder
                     const response = await fetch(`${API_URL}/api/generate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -96,7 +97,9 @@ setError(null);
                     }
 
                     if (result.video) {
-                        const videoBlob = await (await fetch(`data:video/mp4;base66,${result.video}`)).blob(); // Düzeltme: base64
+                        // 2. ADIM: Gelen Base64 verisini çöz
+                        // 🟢 DÜZELTME: 'base66' -> 'base64'
+                        const videoBlob = await (await fetch(`data:video/mp4;base64,${result.video}`)).blob(); 
                         setVideoUrl(URL.createObjectURL(videoBlob));
                     } else {
                         setError('Sunucudan geçerli bir video verisi alınamadı.');
@@ -104,7 +107,8 @@ setError(null);
                 } catch (err) {
                     clearInterval(interval);
                     setProgress(0);
-                    setError(`Ağ Hatası: Render Proxy'den geçerli yanıt alınamadı. Colab'ın hala bağlı olduğundan emin olun.`); 
+                    // 1. ADIM (Render'a giden fetch) başarısız olursa bu hata çıkar.
+                    setError(`Ağ Hatası: Render Proxy'den geçerli yanıt alınamadı. Colab'ın hala bağlı olduğundan emin olun. Hata: ${err.message}`); 
                 } finally {
                     setLoading(false);
                 }
@@ -122,7 +126,6 @@ setError(null);
                     </header>
                     <div className="w-full max-w-4xl bg-white shadow-2xl rounded-xl p-6 sm:p-10 border border-gray-100">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                            {/* Resim Yükleme */}
                             <div className="flex flex-col space-y-4">
                                 <h2 className="text-xl font-semibold text-gray-700 flex items-center"><Camera className="w-5 h-5 mr-2 text-indigo-500" /> 1. Görüntü Yükle</h2>
                                 <label htmlFor="file-upload" className="block cursor-pointer p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 transition duration-300 bg-gray-50 text-center">
@@ -132,7 +135,6 @@ setError(null);
                                     <input id="file-upload" type="file" accept="image/*" className="hidden" onChange={handleImageChange}/>
                                 </label>
                             </div>
-                            {/* Prompt Alanı */}
                             <div className="flex flex-col space-y-4">
                                 <h2 className="text-xl font-semibold text-gray-700 flex items-center"><ArrowRight className="w-5 h-5 mr-2 text-indigo-500" /> 2. Hareket Açıklaması</h2>
                                 <textarea
@@ -143,7 +145,6 @@ setError(null);
                                 />
                             </div>
                         </div>
-                        {/* 3. Üretim Butonu ve Hata/Yüklenme Mesajları */}
                         <div className="flex flex-col items-center">
                             <button
                                 onClick={generateVideo}
@@ -154,7 +155,6 @@ setError(null);
                             </button>
                             {error && (<div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg flex items-start w-full"><AlertTriangle className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" /><p className="text-sm font-medium">{error}</p></div>)}
                         </div>
-                        {/* 4. Sonuç Alanı */}
                         {videoUrl && (
                             <div className="mt-10 pt-6 border-t border-gray-200">
                                 <h2 className="text-2xl font-bold text-gray-700 mb-4 text-center">🎬 Üretilen Video</h2>
@@ -170,10 +170,7 @@ setError(null);
                 </div>
             );
         }
-
-        // Uygulamayı başlat
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-
     </script>
 </body>
 </html>
