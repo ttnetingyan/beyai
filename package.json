@@ -1,0 +1,17 @@
+{
+  "name": "beyai",
+  "version": "1.0.0",
+  "description": "AI Görselden Video Dönüştürücü",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "build": "echo 'No build step needed'"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2"
+  }
+}
