@@ -16,7 +16,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // Lucide ikonlarının basit bir kopyası (JSX içinde SVG olarak kullanılacak)
+        // Lucide ikonlarının basit bir kopyası
         const { Camera, RefreshCw, Loader, AlertTriangle, ArrowRight } = { 
             Camera: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h.5a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2v-3"></path><path d="M20.5 8.5l-3.5 3.5m0 0l-3.5-3.5m3.5 3.5l3.5 3.5"></path></svg>,
             RefreshCw: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.49"></path></svg>,
@@ -62,7 +62,7 @@
                 }
 
                 setLoading(true);
-                setError(null);
+setError(null);
                 setVideoUrl(null);
                 setProgress(0);
 
@@ -87,7 +87,7 @@
                     if (!response.ok) {
                         const errorMsg = result.error || `Bilinmeyen Hata: ${response.status} ${response.statusText}`;
                         if (errorMsg.includes("Colab bağlı değil") || response.status === 503) {
-                            setError("❌ BAĞLANTI HATASI (503): Colab sunucusu Render Proxy'ye bağlı değil. Lütfen Colab not defterinizi çalıştırdığınızdan emin olun.");
+                            setError("❌ BAĞLANTI HATASI (503): Colab sunucusu Render Proxy'ye bağlı değil.");
                         } else {
                             setError(`Video Üretiminde Hata: ${errorMsg}`);
                         }
@@ -96,7 +96,7 @@
                     }
 
                     if (result.video) {
-                        const videoBlob = await (await fetch(`data:video/mp4;base64,${result.video}`)).blob();
+                        const videoBlob = await (await fetch(`data:video/mp4;base66,${result.video}`)).blob(); // Düzeltme: base64
                         setVideoUrl(URL.createObjectURL(videoBlob));
                     } else {
                         setError('Sunucudan geçerli bir video verisi alınamadı.');
@@ -104,7 +104,6 @@
                 } catch (err) {
                     clearInterval(interval);
                     setProgress(0);
-                    // Bu hatayı daha spesifik hale getirdik, büyük ihtimalle Colab tünel hatasından kaynaklanır.
                     setError(`Ağ Hatası: Render Proxy'den geçerli yanıt alınamadı. Colab'ın hala bağlı olduğundan emin olun.`); 
                 } finally {
                     setLoading(false);
