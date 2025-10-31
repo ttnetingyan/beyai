@@ -5,10 +5,24 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-app.use(express.json({ limit: "50mb" })); // Veri limiti arttırıldı
+app.use(express.json({ limit: "50mb" }));
 app.use(cors({ origin: process.env.FRONTEND_URL }));
 
 let COLAB_URL = process.env.COLAB_URL || "";
+
+// =======================================================
+// 🟢 YENİ EKLENEN KÖK ADRES ENDPOINT'İ (404 hatasını çözer)
+// Render veya harici servisler bu endpoint'i sunucunun canlı olup olmadığını kontrol etmek için kullanır.
+app.get("/", (req, res) => {
+    res.json({ 
+        service: "SVD Proxy Server", 
+        status: "Running", 
+        colab_status: COLAB_URL ? "Connected" : "Not Connected",
+        hint: "Video istekleri için /api/generate adresini kullanın."
+    });
+});
+// =======================================================
+
 
 // === COLAB BAĞLANTI ENDPOINT'İ ===
 app.post("/api/setcolab", (req, res) => {
