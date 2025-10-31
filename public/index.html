@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BeyAI - Görselden Video</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 30px;
+        background: #fafafa;
+      }
+      h1 {
+        color: #333;
+      }
+      textarea,
+      input {
+        width: 300px;
+        padding: 10px;
+        margin-top: 10px;
+      }
+      button {
+        margin-top: 10px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      video {
+        width: 300px;
+        margin-top: 15px;
+        border-radius: 10px;
+      }
+      .continue-btn {
+        background-color: #28a745;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎬 BeyAI - Görselden Video</h1>
+    <input type="file" accept="image/*" id="image" />
+    <textarea id="prompt" placeholder="Ne olacağını yaz..."></textarea>
+    <button id="generate">Videoyu Oluştur</button>
+
+    <div id="result"></div>
+
+    <script>
+      const API_URL = "https://beyai.onrender.com/api/generate";
+      const imgInput = document.getElementById("image");
+      const promptInput = document.getElementById("prompt");
+      const generateBtn = document.getElementById("generate");
+      const resultDiv = document.getElementById("result");
+      let baseImage = null;
+
+      imgInput.addEventListener("change", () => {
+        const file = imgInput.files[0];
+        const reader = new FileReader();
+        reader.onload = () => (baseImage = reader.result.split(",")[1]);
+        reader.readAsDataURL(file);
+      });
+
+      async function generateVideo(extraPrompt = "") {
+        const prompt = extraPrompt || promptInput.value;
+        resultDiv.innerHTML = "⏳ Video oluşturuluyor...";
+
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: baseImage, prompt }),
+        });
+
+        const data = await res.json();
+        if (data.video) {
+          const videoSrc = `data:video/mp4;base64,${data.video}`;
+          resultDiv.innerHTML = `
+            <video src="${videoSrc}" controls></video>
+            <br/>
+            <button class="continue-btn" onclick="continueVideo()">➕ Devam Et</button>
+          `;
+        } else {
+          resultDiv.innerHTML = "❌ Video üretilemedi: " + data.error;
+        }
+      }
+
+      generateBtn.onclick = () => generateVideo();
+
+      async function continueVideo() {
+        const yeni = prompt("Yeni sahne: (örnek: karakter yürümeye başlasın)");
+        if (yeni) await generateVideo(yeni);
+      }
+    </script>
+  </body>
+</html>
