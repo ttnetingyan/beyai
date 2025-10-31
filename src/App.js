@@ -1,258 +1,214 @@
-import React, { useState, useCallback } from 'react';
-import { Upload, X, Loader2, Video, Send } from 'lucide-react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { Camera, RefreshCw, Loader, AlertTriangle, ArrowRight } from 'lucide-react';
 
-// API URL, Render Proxy Sunucunuzun Adresi
-// Colab URL'si bu adrese bildirilir ve istekler buradan Colab'a yönlendirilir.
+// ⚠️ Render Proxy URL'niz
 const API_URL = "https://beyai.onrender.com"; 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-const App = () => {
-    // State'ler
-    const [prompt, setPrompt] = useState('');
-    const [selectedImage, setSelectedImage] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [videoUrl, setVideoUrl] = useState('');
-    const [isError, setIsError] = useState(false);
-    const [customMessage, setCustomMessage] = useState('');
+function App() {
+  const [image, setImage] = useState(null);
+  const [prompt, setPrompt] = useState('a futuristic city street at sunset, cinematic, 4k');
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [progress, setProgress] = useState(0); 
 
-    // Görsel Yükleme İşlemi
-    const handleImageUpload = (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            // 5MB limit kontrolü
-            if (file.size > 5 * 1024 * 1024) { 
-                setCustomMessage("Hata: Görsel boyutu 5MB'ı geçmemelidir.");
-                return;
-            }
-            setSelectedImage(file);
-            setVideoUrl('');
-            setCustomMessage('');
-            setIsError(false);
-        }
-    };
+  const handleImageChange = (e) => {
+    setError(null);
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      if (file.size > MAX_FILE_SIZE) {
+        setError('Görüntü boyutu 5MB\'dan küçük olmalıdır.');
+        setImage(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        // Görüntüyü Base64 olarak okur, sadece veri kısmını alır.
+        setImage(reader.result.split(',')[1]); 
+      };
+      reader.readAsDataURL(file);
+    } else if (file) {
+      setError('Lütfen bir resim dosyası seçin.');
+    }
+  };
 
-    // Video Üretim İşlemi
-    const handleGenerateVideo = useCallback(async () => {
-        if (!selectedImage || isLoading) return;
+  const generateVideo = useCallback(async () => {
+    if (!image) {
+      setError('Lütfen önce bir resim yükleyin.');
+      return;
+    }
 
-        setIsLoading(true);
-        setVideoUrl('');
-        setCustomMessage('');
-        setIsError(false);
+    setLoading(true);
+    setError(null);
+    setVideoUrl(null);
+    setProgress(0);
 
-        try {
-            // 1. Görseli Base64'e çevir (API'ye göndermek için)
-            const reader = new FileReader();
-            reader.readAsDataURL(selectedImage);
-            reader.onloadend = async () => {
-                const base64Image = reader.result.split(',')[1];
-                
-                setCustomMessage("Video üretim isteği gönderiliyor. Colab sunucusunun yanıt vermesi 30-60 saniye sürebilir...");
+    const interval = setInterval(() => {
+      setProgress(prev => (prev < 90 ? prev + 1 : 90));
+    }, 400);
 
-                // 2. Proxy Sunucusuna İsteği Gönder
-                const response = await fetch(`${API_URL}/api/generate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        image: base64Image,
-                        prompt: prompt || "stabil ve güzel bir video",
-                        // Diğer SVD parametreleri buraya eklenebilir
-                    }),
-                });
+    try {
+      const payload = { image: image, prompt: prompt };
 
-                const data = await response.json();
+      const response = await fetch(`${API_URL}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
-                if (!response.ok) {
-                    setIsError(true);
-                    setCustomMessage(`Sunucu Hatası: ${data.error || 'Video üretilemedi.'}`);
-                    setVideoUrl('');
-                    return;
-                }
+      clearInterval(interval);
+      setProgress(100);
 
-                if (data.video) {
-                    // Base64 video verisini URL'ye çevir
-                    const videoBlob = await (await fetch(`data:video/mp4;base64,${data.video}`)).blob();
-                    setVideoUrl(URL.createObjectURL(videoBlob));
-                    setCustomMessage("🎉 Video başarıyla oluşturuldu!");
-                } else {
-                    setIsError(true);
-                    setCustomMessage("Hata: Sunucudan geçerli bir video verisi alınamadı.");
-                }
-            };
-            reader.onerror = () => {
-                setIsError(true);
-                setCustomMessage("Görsel okuma hatası.");
-            };
+      const result = await response.json();
 
-        } catch (error) {
-            console.error("API Call Error:", error);
-            setIsError(true);
-            setCustomMessage(`Genel Bağlantı Hatası. Colab sunucusunun çalıştığından emin olun. Hata: ${error.message}`);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [selectedImage, prompt, isLoading]);
-
-
-    // Ana içerik ve durum görüntüleyici
-    const renderContent = () => {
-        if (videoUrl) {
-            return (
-                <div className="w-full max-w-lg mx-auto">
-                    <video 
-                        src={videoUrl} 
-                        controls 
-                        autoPlay
-                        loop
-                        muted
-                        className="w-full h-auto rounded-xl shadow-2xl border-4 border-gray-700"
-                    >
-                        Tarayıcınız video etiketini desteklemiyor.
-                    </video>
-                </div>
+      if (!response.ok) {
+        const errorMsg = result.error || `Bilinmeyen Hata: ${response.status} ${response.statusText}`;
+        
+        if (errorMsg.includes("Colab bağlı değil") || response.status === 503) {
+            setError(
+                "❌ BAĞLANTI HATASI (503): Colab sunucusu Render Proxy'ye bağlı değil. Lütfen Colab not defterinizi çalıştırdığınızdan emin olun."
             );
+        } else {
+            setError(`Video Üretiminde Hata: ${errorMsg}`);
         }
+        setVideoUrl(null);
+        return;
+      }
 
-        if (isLoading) {
-            return (
-                <div className="flex flex-col items-center justify-center space-y-4 p-8 bg-gray-700 rounded-xl shadow-xl">
-                    <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
-                    <p className="text-white text-center font-medium">{customMessage || "Lütfen bekleyin, video hazırlanıyor..."}</p>
+      if (result.video) {
+        // Base64 video verisini Blob'a çevirir ve oynatmak için URL oluşturur.
+        const videoBlob = await (await fetch(`data:video/mp4;base64,${result.video}`)).blob();
+        setVideoUrl(URL.createObjectURL(videoBlob));
+      } else {
+        setError('Sunucudan geçerli bir video verisi alınamadı.');
+      }
+    } catch (err) {
+      clearInterval(interval);
+      setProgress(0);
+      setError(`Ağ Hatası: Render Proxy'ye ulaşılamıyor. URL'yi (${API_URL}) kontrol edin.`);
+    } finally {
+      setLoading(false);
+    }
+  }, [image, prompt]);
+
+  const previewImage = useMemo(() => {
+    return image ? `data:image/jpeg;base64,${image}` : null;
+  }, [image]);
+
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center p-4 sm:p-8 font-[Inter]">
+      <script src="https://cdn.tailwindcss.com"></script>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+      `}</style>
+
+      <header className="text-center mb-8">
+        <h1 className="text-4xl sm:text-5xl font-extrabold text-indigo-800">
+          AI Video Generator <span className='text-3xl text-gray-500'>SVD/Colab</span>
+        </h1>
+        <p className="mt-2 text-lg text-gray-600">Görüntüleri Stable Video Diffusion ile canlandırın.</p>
+      </header>
+
+      <div className="w-full max-w-4xl bg-white shadow-2xl rounded-xl p-6 sm:p-10 border border-gray-100">
+
+        {/* 1. Resim Yükleme ve Prompt Alanı */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          
+          {/* Resim Yükleme */}
+          <div className="flex flex-col space-y-4">
+            <h2 className="text-xl font-semibold text-gray-700 flex items-center">
+              <Camera className="w-5 h-5 mr-2 text-indigo-500" /> 1. Görüntü Yükle
+            </h2>
+            <label htmlFor="file-upload" className="block cursor-pointer p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 transition duration-300 bg-gray-50 text-center">
+              {previewImage ? (
+                <img src={previewImage} alt="Önizleme" className="w-full h-auto max-h-64 object-contain rounded-md mx-auto" />
+              ) : (
+                <div className='text-gray-500'>
+                  <p className="font-medium">Bir dosya seçin veya buraya sürükleyin</p>
+                  <p className="text-sm mt-1">JPEG veya PNG (Max 5MB)</p>
                 </div>
-            );
-        }
+              )}
+              <input 
+                id="file-upload" 
+                type="file" 
+                accept="image/*" 
+                className="hidden" 
+                onChange={handleImageChange}
+              />
+            </label>
+          </div>
 
-        if (isError) {
-            return (
-                <div className="p-4 bg-red-800 text-white rounded-xl shadow-xl border-2 border-red-600">
-                    <p className="font-bold mb-2">Üretim Hatası</p>
-                    <p>{customMessage}</p>
-                    <p className="mt-2 text-sm">Lütfen Colab sunucunuzun çalıştığından ve URL'sinin Render Proxy'ye doğru bildirildiğinden emin olun.</p>
-                </div>
-            );
-        }
-
-        if (selectedImage) {
-            return (
-                <div className="flex flex-col items-center space-y-4">
-                    <img 
-                        src={URL.createObjectURL(selectedImage)} 
-                        alt="Seçilen Görsel" 
-                        className="w-48 h-48 object-cover rounded-xl shadow-xl border-4 border-gray-700"
-                    />
-                    <div className="text-gray-300 text-sm">Görsel Yüklendi ({selectedImage.name})</div>
-                </div>
-            );
-        }
-
-        return (
-            <div className="flex flex-col items-center justify-center h-48 border-4 border-dashed border-gray-500 rounded-xl p-6 bg-gray-800 transition duration-300 hover:border-blue-500 cursor-pointer">
-                <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                <p className="text-gray-400 text-center">Video oluşturmak için bir görsel seçin.</p>
-                <p className="text-xs text-gray-500 mt-1">(Max 5MB)</p>
-            </div>
-        );
-    };
-
-    // Ana Bileşen Görünümü
-    return (
-        <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-8 font-sans">
-            <header className="text-center mb-10">
-                <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
-                    SVD Video Oluşturucu
-                </h1>
-                <p className="text-gray-400 mt-2">Görselden video üretimi (Colab & Render ile güçlendirilmiştir)</p>
-            </header>
-
-            <div className="max-w-3xl mx-auto space-y-8">
-                
-                {/* 1. Görsel Yükleme Alanı */}
-                <div className="bg-gray-800 p-6 rounded-2xl shadow-2xl">
-                    <h2 className="text-2xl font-semibold mb-4 text-blue-400">1. Görsel Yükle</h2>
-                    <label className="block">
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageUpload}
-                            className="hidden"
-                        />
-                        {/* Görsel Yükleme İkonu veya Önizleme */}
-                        {renderContent()}
-                    </label>
-
-                    {selectedImage && (
-                        <button
-                            onClick={() => {
-                                setSelectedImage(null);
-                                setVideoUrl('');
-                                setCustomMessage('');
-                                setIsError(false);
-                            }}
-                            className="mt-4 flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition duration-200 shadow-md"
-                        >
-                            <X className="w-5 h-5 mr-2" />
-                            Görseli Kaldır
-                        </button>
-                    )}
-                </div>
-
-                {/* 2. Prompt ve Üretim Alanı */}
-                <div className="bg-gray-800 p-6 rounded-2xl shadow-2xl space-y-4">
-                    <h2 className="text-2xl font-semibold text-blue-400">2. Prompt Gir & Üret</h2>
-                    <textarea
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder="Örn: 'Fotoğraf yavaşça hareket ediyor, hafif bir kamera sallanmasıyla.'"
-                        rows="3"
-                        className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-blue-500 focus:border-blue-500 transition duration-200"
-                        disabled={!selectedImage || isLoading}
-                    />
-                    
-                    <p className="text-sm text-gray-400">
-                        *Prompt girmek zorunlu değildir, ancak video hareketini yönlendirmeye yardımcı olur.
-                    </p>
-
-                    <button
-                        onClick={handleGenerateVideo}
-                        disabled={!selectedImage || isLoading}
-                        className={`w-full flex items-center justify-center px-6 py-3 font-bold rounded-lg transition duration-300 shadow-lg ${
-                            selectedImage && !isLoading
-                                ? 'bg-green-600 hover:bg-green-700 text-white transform hover:scale-[1.01]'
-                                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                        }`}
-                    >
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                Video Oluşturuluyor...
-                            </>
-                        ) : (
-                            <>
-                                <Video className="w-5 h-5 mr-2" />
-                                Video Oluştur
-                            </>
-                        )}
-                    </button>
-                </div>
-                
-                {/* 3. Sonuç ve Mesaj Alanı (Video Gösterimi için renderContent tekrar çağrılır) */}
-                <div className="min-h-[300px] flex items-center justify-center flex-col space-y-4">
-                   {renderContent()} 
-                   {(customMessage && !videoUrl) && (
-                        <p className={`text-sm text-center font-medium ${isError ? 'text-red-400' : 'text-yellow-400'}`}>
-                            {customMessage}
-                        </p>
-                    )}
-                </div>
-
-                {/* API URL Bilgisi */}
-                 <div className="text-center pt-4 text-gray-500 text-xs">
-                    <p>API Proxy URL'si: <code className="bg-gray-700 p-1 rounded">https://beyai.onrender.com</code></p>
-                    <p>Lütfen Colab sunucusunun çalıştığından ve URL'sinin Render Proxy'ye başarıyla bildirildiğinden emin olun.</p>
-                </div>
-
-            </div>
+          {/* Prompt Alanı */}
+          <div className="flex flex-col space-y-4">
+            <h2 className="text-xl font-semibold text-gray-700 flex items-center">
+              <ArrowRight className="w-5 h-5 mr-2 text-indigo-500" /> 2. Hareket Açıklaması (Prompt)
+            </h2>
+            <textarea
+              className="w-full p-3 h-36 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 resize-none"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Görüntünün nasıl hareket etmesini istediğinizi açıklayın..."
+            />
+          </div>
         </div>
-    );
-};
+
+        {/* 3. Üretim Butonu ve Hata/Yüklenme Mesajları */}
+        <div className="flex flex-col items-center">
+          <button
+            onClick={generateVideo}
+            disabled={loading || !image}
+            className={`
+              flex items-center justify-center px-8 py-3 text-lg font-bold rounded-full shadow-lg transition-all duration-300
+              ${loading || !image ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-xl active:scale-95'}
+            `}
+          >
+            {loading ? (
+              <>
+                <Loader className="w-5 h-5 mr-3 animate-spin" />
+                Video Üretiliyor ({progress}%)
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-5 h-5 mr-2" />
+                Video Üret
+              </>
+            )}
+          </button>
+          
+          {error && (
+            <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg flex items-start w-full">
+              <AlertTriangle className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
+              <p className="text-sm font-medium">{error}</p>
+            </div>
+          )}
+          
+        </div>
+
+        {/* 4. Sonuç Alanı */}
+        {videoUrl && (
+          <div className="mt-10 pt-6 border-t border-gray-200">
+            <h2 className="text-2xl font-bold text-gray-700 mb-4 text-center">
+              🎬 Üretilen Video
+            </h2>
+            <div className="flex justify-center">
+              <video 
+                key={videoUrl} 
+                controls 
+                autoPlay
+                loop
+                className="w-full max-w-xl rounded-xl shadow-2xl border border-gray-200"
+              >
+                <source src={videoUrl} type="video/mp4" />
+                Tarayıcınız video etiketini desteklemiyor.
+              </video>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default App;
