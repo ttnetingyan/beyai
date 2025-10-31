@@ -2,29 +2,36 @@ import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
 dotenv.config();
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
-app.use(cors({ origin: process.env.FRONTEND_URL }));
+
+// Frontend URL'sini ortam değişkeninden alır (Çapraz kaynak isteği için)
+const frontendUrl = process.env.FRONTEND_URL || '*'; // Yerel test için '*' bırakılabilir.
+app.use(cors({ origin: frontendUrl }));
 
 let COLAB_URL = process.env.COLAB_URL || "";
 
-// =======================================================
-// 🟢 YENİ EKLENEN KÖK ADRES ENDPOINT'İ (404 hatasını çözer)
-// Render veya harici servisler bu endpoint'i sunucunun canlı olup olmadığını kontrol etmek için kullanır.
+// ESM için __dirname tanımı
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// --- 1. Statik Dosya Sunumu ---
+// Ana klasördeki index.html dosyasını ve diğer statik dosyaları sunar.
+app.use(express.static(__dirname));
+
+// Kök adres kontrolü (Health Check)
 app.get("/", (req, res) => {
-    res.json({ 
-        service: "SVD Proxy Server", 
-        status: "Running", 
-        colab_status: COLAB_URL ? "Connected" : "Not Connected",
-        hint: "Video istekleri için /api/generate adresini kullanın."
-    });
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
-// =======================================================
 
+// --- 2. Proxy Mantığı ---
 
-// === COLAB BAĞLANTI ENDPOINT'İ ===
+// Colab'ın URL bildirdiği endpoint
 app.post("/api/setcolab", (req, res) => {
   const { url } = req.body;
   COLAB_URL = url;
@@ -32,13 +39,13 @@ app.post("/api/setcolab", (req, res) => {
   res.json({ ok: true, url: COLAB_URL });
 });
 
-// === VİDEO ÜRETİM ENDPOINT'İ ===
+// Video üretim endpoint'i
 app.post("/api/generate", async (req, res) => {
   try {
     if (!COLAB_URL) {
       return res.status(503).json({ 
         error: "Colab bağlı değil.", 
-        hint: "Colab not defterinin çalışıp bu proxy'ye URL bildirdiğinden emin olun." 
+        hint: "Colab not defterinin çalıştığından emin olun." 
       });
     }
     
@@ -62,5 +69,5 @@ app.post("/api/generate", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Proxy Server çalışıyor, port: ${PORT}`);
+  console.log(`🚀 Sunucu çalışıyor, port: ${PORT}`);
 });
