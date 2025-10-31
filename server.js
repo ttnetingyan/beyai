@@ -15,15 +15,11 @@ app.use(cors({ origin: frontendUrl }));
 
 let COLAB_URL = process.env.COLAB_URL || "";
 
-// ESM için __dirname tanımı
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- 1. Statik Dosya Sunumu ---
-// Ana klasördeki tüm dosyaları (index.html, vb.) sunar.
 app.use(express.static(__dirname));
-
-// Kök adrese gelen istek için index.html dosyasını gönderir
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -38,6 +34,26 @@ app.post("/api/setcolab", (req, res) => {
   res.json({ ok: true, url: COLAB_URL });
 });
 
+// === 🟢 YENİ EKLENEN TEST ROTASI 🟢 ===
+// /api/test isteğini Colab'a yönlendirir.
+app.get("/api/test", async (req, res) => {
+  try {
+    if (!COLAB_URL) {
+      return res.status(503).json({ error: "Colab bağlı değil." });
+    }
+    console.log(`⏩ Test isteğini Colab'a yönlendiriyor: ${COLAB_URL}/api/test`);
+    
+    // Colab'dan yanıtı bekle
+    const colabResponse = await fetch(`${COLAB_URL}/api/test`);
+    const result = await colabResponse.json();
+    
+    // Colab'dan gelen yanıtı ve status kodunu aynen geri gönder
+    res.status(colabResponse.status).json(result);
+  } catch (err) {
+    res.status(500).json({ error: `Test proxy hatası: ${err.message}` });
+  }
+});
+
 // Video üretim endpoint'i
 app.post("/api/generate", async (req, res) => {
   try {
@@ -47,6 +63,8 @@ app.post("/api/generate", async (req, res) => {
         hint: "Colab not defterinin çalıştığından emin olun." 
       });
     }
+    
+    console.log(`⏩ Video isteğini Colab'a yönlendiriyor: ${COLAB_URL}/api/generate`);
     
     const colabResponse = await fetch(`${COLAB_URL}/api/generate`, {
       method: "POST",
